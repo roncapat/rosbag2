@@ -29,9 +29,6 @@
 
 namespace rosbag2_cpp
 {
-// Match datatype names (foo_msgs/Bar or foo_msgs/msg/Bar)
-static const std::regex PACKAGE_TYPENAME_REGEX{R"(^([a-zA-Z0-9_]+)/(?:msg/)?([a-zA-Z0-9_]+)$)"};
-
 // Match field types from .msg definitions ("foo_msgs/Bar" in "foo_msgs/Bar[] bar")
 static const std::regex MSG_FIELD_TYPE_REGEX{R"((?:^|\n)\s*([a-zA-Z0-9_/]+)(?:\[[^\]]*\])?\s+)"};
 
@@ -142,13 +139,30 @@ const LocalMessageDefinitionSource::MessageSpec & LocalMessageDefinitionSource::
     return it->second;
   }
   std::smatch match;
-  const auto topic_type = definition_identifier.topic_type();
-  if (!std::regex_match(topic_type, match, PACKAGE_TYPENAME_REGEX)) {
+  const std::string topic_type = definition_identifier.topic_type();
+
+  static const std::string valid_first_chars{"a-zA-Z"};
+  static const std::string valid_nonfirst_chars{"a-zA-Z0-9_"};
+  static const std::string ros_name = "[" + valid_first_chars + "][" + valid_nonfirst_chars + "]*";
+  const std::regex no_namespace_regex{"^(" + ros_name + ")/(" + ros_name + ")$"};
+  const std::regex with_namespace_regex{
+    "^(" + ros_name + ")/(" + ros_name + ")/(" + ros_name + ")$"};
+
+  std::string package_name, namespace_name, type_name;
+  if (std::regex_match(topic_type, match, no_namespace_regex)) {
+    package_name = match[1];
+    namespace_name = "msg";
+    type_name = match[2];
+  } else if (std::regex_match(topic_type, match, with_namespace_regex)) {
+    package_name = match[1];
+    namespace_name = match[2];
+    type_name = match[3];
+  } else {
     throw std::invalid_argument("Invalid topic_type: " + topic_type);
   }
-  std::string package = match[1];
-  std::string share_dir = ament_index_cpp::get_package_share_directory(package);
-  std::ifstream file{share_dir + "/msg/" + match[2].str() +
+
+  std::string share_dir = ament_index_cpp::get_package_share_directory(package_name);
+  std::ifstream file{share_dir + "/" + namespace_name + "/" + type_name +
     extension_for_format(definition_identifier.format())};
   if (!file.good()) {
     throw DefinitionNotFoundError(definition_identifier.topic_type());
@@ -157,7 +171,7 @@ const LocalMessageDefinitionSource::MessageSpec & LocalMessageDefinitionSource::
   std::string contents{std::istreambuf_iterator(file), {}};
   const MessageSpec & spec = msg_specs_by_definition_identifier_.emplace(
     definition_identifier,
-    MessageSpec(definition_identifier.format(), std::move(contents), package)).first->second;
+    MessageSpec(definition_identifier.format(), std::move(contents), package_name)).first->second;
 
   // "References and pointers to data stored in the container are only invalidated by erasing that
   // element, even when the corresponding iterator is invalidated."
