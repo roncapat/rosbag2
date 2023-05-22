@@ -31,6 +31,11 @@
 
 #include "./pybind11.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <iostream>
+#endif
+
 namespace py = pybind11;
 typedef std::unordered_map<std::string, rclcpp::QoS> QoSMap;
 
@@ -132,7 +137,49 @@ class Player
 public:
   Player()
   {
-    rclcpp::init(0, nullptr);
+    auto init_options = rclcpp::InitOptions();
+    init_options.shutdown_on_signal = false;
+    rclcpp::init(0, nullptr, init_options, rclcpp::SignalHandlerOptions::None);
+    std::signal(
+      SIGTERM, [](int /* signal */) {
+        rclcpp::shutdown();
+      });
+    std::signal(
+      SIGINT, [](int /* signal */) {
+        rclcpp::shutdown();
+      });
+#ifdef _WIN32
+    // According to the
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/signal?view=msvc-170
+    // SIGINT is not supported for any Win32 application. When a CTRL+C interrupt occurs,
+    // Win32 operating systems generate a new thread to specifically handle that interrupt.
+    // Therefore, need to use native Windows control event handler as analog for the SIGINT.
+
+    // Enable default CTRL+C handler first. This is workaround and needed for the cases when
+    // process created with CREATE_NEW_PROCESS_GROUP flag. Without it, installing custom Ctrl+C
+    // handler will not work.
+    if (!SetConsoleCtrlHandler(nullptr, false)) {
+      std::cerr << "Rosbag2 player error: Failed to enable default CTL+C handler.\n";
+    }
+    // Installing our own control handler
+    auto CtrlHandler = [](DWORD fdwCtrlType) -> BOOL {
+        switch (fdwCtrlType) {
+          case CTRL_C_EVENT:
+          case CTRL_BREAK_EVENT:
+          case CTRL_CLOSE_EVENT:
+            rclcpp::shutdown();
+            return TRUE;
+          case CTRL_SHUTDOWN_EVENT:
+            rclcpp::shutdown();
+            return FALSE;
+          default:
+            return FALSE;
+        }
+      };
+    if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+      std::cerr << "Rosbag2 player error: Could not set control handler.\n";
+    }
+#endif  // #ifdef _WIN32
   }
 
   virtual ~Player()
@@ -157,7 +204,7 @@ public:
     player->play();
 
     exec.cancel();
-    spin_thread.join();
+    if (spin_thread.joinable()) {spin_thread.join();}
   }
 
   void burst(
@@ -182,8 +229,8 @@ public:
     player->burst(num_messages);
 
     exec.cancel();
-    spin_thread.join();
-    play_thread.join();
+    if (spin_thread.joinable()) {spin_thread.join();}
+    if (play_thread.joinable()) {play_thread.join();}
   }
 };
 
@@ -208,6 +255,39 @@ public:
       SIGINT, [](int /* signal */) {
         rosbag2_py::Recorder::cancel();
       });
+#ifdef _WIN32
+    // According to the
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/signal?view=msvc-170
+    // SIGINT is not supported for any Win32 application. When a CTRL+C interrupt occurs,
+    // Win32 operating systems generate a new thread to specifically handle that interrupt.
+    // Therefore, need to use native Windows control event handler as analog for the SIGINT.
+
+    // Enable default CTRL+C handler first. This is workaround and needed for the cases when
+    // process created with CREATE_NEW_PROCESS_GROUP flag. Without it, installing custom Ctrl+C
+    // handler will not work.
+    if (!SetConsoleCtrlHandler(nullptr, false)) {
+      std::cerr << "Rosbag2 recorder error: Failed to enable default CTL+C handler.\n";
+    }
+    // Installing our own control handler
+    auto CtrlHandler = [](DWORD fdwCtrlType) -> BOOL {
+        switch (fdwCtrlType) {
+          case CTRL_C_EVENT:
+          case CTRL_BREAK_EVENT:
+          case CTRL_CLOSE_EVENT:
+            rosbag2_py::Recorder::cancel();
+            return TRUE;
+          case CTRL_SHUTDOWN_EVENT:
+            rosbag2_py::Recorder::cancel();
+            rclcpp::shutdown();
+            return FALSE;
+          default:
+            return FALSE;
+        }
+      };
+    if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+      std::cerr << "Rosbag2 recorder error: Could not set control handler.\n";
+    }
+#endif  // #ifdef _WIN32
   }
 
   virtual ~Recorder()
