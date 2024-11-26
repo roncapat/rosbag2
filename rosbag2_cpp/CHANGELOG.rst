@@ -2,8 +2,8 @@
 Changelog for package rosbag2
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.30.0 (2024-11-26)
+-------------------
 * Bugfix: Update metadata with new file_info before saving it first time (`#1843 <https://github.com/ros2/rosbag2/issues/1843>`_)
 * Make snapshot writing into a new file each time it is triggered (`#1842 <https://github.com/ros2/rosbag2/issues/1842>`_)
 * Bugfix for rosbag2_cpp serialization converter (`#1814 <https://github.com/ros2/rosbag2/issues/1814>`_)

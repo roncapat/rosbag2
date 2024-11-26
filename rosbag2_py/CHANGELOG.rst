@@ -2,8 +2,8 @@
 Changelog for package rosbag2_py
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.30.0 (2024-11-26)
+-------------------
 * Add in python3-dev build dependency. (`#1863 <https://github.com/ros2/rosbag2/issues/1863>`_)
 * Add "--sort" CLI option to the "ros2 bag info" command (`#1804 <https://github.com/ros2/rosbag2/issues/1804>`_)
 * Remove use of python_cmake_module (`#1570 <https://github.com/ros2/rosbag2/issues/1570>`_)

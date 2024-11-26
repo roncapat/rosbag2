@@ -2,8 +2,8 @@
 Changelog for package rosbag2_test_common
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.30.0 (2024-11-26)
+-------------------
 * Remove use of python_cmake_module (`#1570 <https://github.com/ros2/rosbag2/issues/1570>`_)
 * Improve the reliability of rosbag2 tests (`#1796 <https://github.com/ros2/rosbag2/issues/1796>`_)
 * Contributors: Alejandro Hernández Cordero, Chris Lalancette, Michael Orlov
