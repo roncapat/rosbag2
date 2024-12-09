@@ -30,7 +30,7 @@ option(DISABLE_SANITIZERS "disables the use of gcc sanitizers" ON)
 if(NOT DISABLE_SANITIZERS AND CMAKE_COMPILER_IS_GNUCXX)
   include(CheckCXXSourceRuns)
   set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
-  set(CMAKE_REQUIRED_FLAGS "${OLD_CMAKE_REQUIRED_FLAGS} -fsanitize=leak")
+  set(CMAKE_REQUIRED_FLAGS "${OLD_CMAKE_REQUIRED_FLAGS} -fsanitize=address,leak,undefined")
   check_cxx_source_runs("int main() {}" HAVE_SANITIZERS)
   set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
   if(NOT HAVE_SANITIZERS)
@@ -75,9 +75,7 @@ add_library(${PROJECT_NAME} SHARED
   src/rosbag2_cpp/reindexer.cpp
   src/rosbag2_cpp/service_utils.cpp)
 
-target_link_libraries(${PROJECT_NAME}
-  PUBLIC
-  ament_index_cpp::ament_index_cpp
+target_link_libraries(${PROJECT_NAME} PUBLIC
   pluginlib::pluginlib
   rclcpp::rclcpp
   rcpputils::rcpputils
@@ -87,8 +85,11 @@ target_link_libraries(${PROJECT_NAME}
   rosbag2_storage::rosbag2_storage
   rosidl_runtime_c::rosidl_runtime_c
   rosidl_runtime_cpp::rosidl_runtime_cpp
-  rosidl_typesupport_cpp::rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
+)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+  ament_index_cpp::ament_index_cpp
+  rosidl_typesupport_cpp::rosidl_typesupport_cpp
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -122,12 +123,13 @@ ament_export_targets(export_${PROJECT_NAME})
 ament_export_dependencies(
   pluginlib
   rclcpp
+  rcpputils
+  rcutils
   rmw
   rmw_implementation
   rosbag2_storage
   rosidl_runtime_c
   rosidl_runtime_cpp
-  rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp
 )
 
@@ -135,7 +137,9 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gmock REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   find_package(test_msgs REQUIRED)
+  find_package(std_msgs REQUIRED)
   find_package(rosbag2_test_msgdefs REQUIRED)
+  find_package(rmw_implementation_cmake REQUIRED)
   ament_lint_auto_find_test_dependencies()
 
   add_library(
@@ -164,7 +168,11 @@ if(BUILD_TESTING)
     test/rosbag2_cpp/test_typesupport_helpers.cpp
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   if(TARGET test_typesupport_helpers)
-    target_link_libraries(test_typesupport_helpers ${PROJECT_NAME})
+    target_link_libraries(test_typesupport_helpers
+      ${PROJECT_NAME}
+      ament_index_cpp::ament_index_cpp
+      rosidl_typesupport_cpp::rosidl_typesupport_cpp
+    )
   endif()
 
   ament_add_gmock(test_info
@@ -182,6 +190,7 @@ if(BUILD_TESTING)
       rosbag2_storage::rosbag2_storage
       rosbag2_test_common::rosbag2_test_common
       ${test_msgs_TARGETS}
+      ${std_msgs_TARGETS}
     )
   endif()
 
@@ -246,6 +255,30 @@ if(BUILD_TESTING)
     )
   endif()
 
+  ament_add_gmock_executable(test_serialization_converter test/rosbag2_cpp/test_serialization_converter.cpp)
+  if(TARGET test_serialization_converter)
+    if(NOT DISABLE_SANITIZERS)
+      target_compile_options(test_serialization_converter PUBLIC $<$<CXX_COMPILER_ID:GNU>:-fsanitize=address,leak,undefined>)
+      target_link_libraries(test_serialization_converter $<$<CXX_COMPILER_ID:GNU>:-fsanitize=address,leak,undefined>)
+    endif()
+    target_link_libraries(test_serialization_converter
+      ${PROJECT_NAME}
+      rosbag2_storage::rosbag2_storage
+      ${std_msgs_TARGETS}
+    )
+  endif()
+
+  function(test_serialization_converter_for_rmw_implementation)
+    set(rmw_implementation_env_var RMW_IMPLEMENTATION=${rmw_implementation})
+    ament_add_gmock_test(test_serialization_converter
+      TEST_NAME test_serialization_converter${target_suffix}
+      ENV ${rmw_implementation_env_var}
+    )
+  endfunction()
+  # Run test_serialization_converter for each rmw implementation because default serialization
+  # converter uses rmw specific functions for serialization and deserialization.
+  call_for_each_rmw_implementation(test_serialization_converter_for_rmw_implementation)
+
   ament_add_gmock(test_multifile_reader
     test/rosbag2_cpp/test_multifile_reader.cpp)
   if(TARGET test_multifile_reader)
@@ -264,7 +297,11 @@ if(BUILD_TESTING)
   ament_add_gmock(test_service_utils
     test/rosbag2_cpp/test_service_utils.cpp)
   if(TARGET test_service_utils)
-    target_link_libraries(test_service_utils ${PROJECT_NAME})
+    target_link_libraries(test_service_utils
+      ${PROJECT_NAME}
+      rosbag2_test_common::rosbag2_test_common
+      ${test_msgs_TARGETS}
+    )
   endif()
 endif()
 

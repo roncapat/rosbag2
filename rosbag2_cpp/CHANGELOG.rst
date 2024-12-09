@@ -2,6 +2,42 @@
 Changelog for package rosbag2
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.30.0 (2024-11-26)
+-------------------
+* Bugfix: Update metadata with new file_info before saving it first time (`#1843 <https://github.com/ros2/rosbag2/issues/1843>`_)
+* Make snapshot writing into a new file each time it is triggered (`#1842 <https://github.com/ros2/rosbag2/issues/1842>`_)
+* Bugfix for rosbag2_cpp serialization converter (`#1814 <https://github.com/ros2/rosbag2/issues/1814>`_)
+* Allow unknown types in bag rewrite (`#1812 <https://github.com/ros2/rosbag2/issues/1812>`_)
+* Contributors: Alejandro Hernández Cordero, Michael Orlov, Nicola Loi, Tomoya Fujita
+
+0.29.0 (2024-09-03)
+-------------------
+* Add computation of size contribution to info verb (`#1726 <https://github.com/ros2/rosbag2/issues/1726>`_)
+* [WIP] Remove rcpputils::fs dependencies in rosbag2 packages (`#1740 <https://github.com/ros2/rosbag2/issues/1740>`_)
+* Removed deprecated write method (`#1738 <https://github.com/ros2/rosbag2/issues/1738>`_)
+* Bugfix for bag_split event callbacks called to early with file compression (`#1643 <https://github.com/ros2/rosbag2/issues/1643>`_)
+* Add topics with zero message counts to the SQLiteStorage::get_metadata(). (`#1725 <https://github.com/ros2/rosbag2/issues/1725>`_)
+* Contributors: Alejandro Hernández Cordero, Michael Orlov, Nicola Loi, Tomoya Fujita
+
+0.28.0 (2024-06-17)
+-------------------
+* Propagate "custom_data" and "ros_distro" in to the metadata.yaml file during re-indexing (`#1700 <https://github.com/ros2/rosbag2/issues/1700>`_)
+* Bugfix for writer not being able to open again after closing (`#1599 <https://github.com/ros2/rosbag2/issues/1599>`_)
+* Contributors: Cole Tucker, yschulz
+
+0.27.0 (2024-04-30)
+-------------------
+
+0.26.1 (2024-04-17)
+-------------------
+
+0.26.0 (2024-04-16)
+-------------------
+* Support service 2/2 --- rosbag2 service play (`#1481 <https://github.com/ros2/rosbag2/issues/1481>`_)
+* Use middleware send and receive timestamps from message_info during recording (`#1531 <https://github.com/ros2/rosbag2/issues/1531>`_)
+* Update to use yaml-cpp version 0.8.0. (`#1605 <https://github.com/ros2/rosbag2/issues/1605>`_)
+* Contributors: Barry Xu, Chris Lalancette, jmachowinski, Michael Orlov
+
 0.25.0 (2024-03-27)
 -------------------
 * Use std::filesystem instead of rcpputils::fs (`#1576 <https://github.com/ros2/rosbag2/issues/1576>`_)

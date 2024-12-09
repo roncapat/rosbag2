@@ -230,8 +230,8 @@ TEST_P(ComposableRecorderTests, recorder_can_parse_parameters_from_file) {
     "/exclude_service/_service_event", "/other_exclude_service/_service_event"};
   EXPECT_EQ(record_options.exclude_service_events, exclude_services);
   EXPECT_EQ(record_options.node_prefix, "prefix");
-  EXPECT_EQ(record_options.compression_mode, "stream");
-  EXPECT_EQ(record_options.compression_format, "h264");
+  EXPECT_EQ(record_options.compression_mode, "file");
+  EXPECT_EQ(record_options.compression_format, "zstd");
   EXPECT_EQ(record_options.compression_queue_size, 10);
   EXPECT_EQ(record_options.compression_threads, 2);
   EXPECT_EQ(record_options.compression_threads_priority, -1);
@@ -245,6 +245,7 @@ TEST_P(ComposableRecorderTests, recorder_can_parse_parameters_from_file) {
   EXPECT_EQ(record_options.include_unpublished_topics, true);
   EXPECT_EQ(record_options.ignore_leaf_topics, false);
   EXPECT_EQ(record_options.start_paused, false);
+  EXPECT_EQ(record_options.disable_keyboard_controls, true);
   EXPECT_EQ(record_options.use_sim_time, false);
 
   EXPECT_EQ(storage_options.uri, root_bag_path_.generic_string());

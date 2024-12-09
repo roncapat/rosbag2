@@ -136,15 +136,26 @@ TEST_P(ComposablePlayerTests, player_can_parse_parameters_from_file) {
 
   auto player = std::make_shared<MockPlayer>("player_params_node", opts);
   auto play_options = player->get_play_options();
-  auto storage_options = player->get_storage_options();
+  auto storage_options = player->get_all_storage_options();
 
   EXPECT_EQ(play_options.read_ahead_queue_size, 3);
   EXPECT_EQ(play_options.node_prefix, "test");
   EXPECT_EQ(play_options.rate, 13.0);
   std::vector<std::string> topics_to_filter {"/foo", "/bar"};
   EXPECT_EQ(play_options.topics_to_filter, topics_to_filter);
-  EXPECT_EQ(play_options.topics_regex_to_filter, "[xyz]/topic");
-  EXPECT_EQ(play_options.topics_regex_to_exclude, "[abc]/topic");
+  std::vector<std::string> services_to_filter {
+    "/service1/_service_event",
+    "/service2/_service_event"};
+  EXPECT_EQ(play_options.services_to_filter, services_to_filter);
+  EXPECT_EQ(play_options.regex_to_filter, "[xyz]/topic_service");
+  std::vector<std::string> exclude_topics_to_filter {"/exclude_foo", "/exclude_bar"};
+  EXPECT_EQ(play_options.exclude_topics_to_filter, exclude_topics_to_filter);
+  std::vector<std::string> exclude_services_to_filter {
+    "/exclude_service1/_service_event",
+    "/exclude_service2/_service_event"};
+  EXPECT_EQ(play_options.exclude_services_to_filter, exclude_services_to_filter);
+  EXPECT_EQ(play_options.exclude_regex_to_filter, "[abc]/topic_service");
+
   std::unordered_map<std::string, rclcpp::QoS> topic_qos_profile_overrides{
     std::pair{
       "/overrided_topic_qos",
@@ -159,22 +170,29 @@ TEST_P(ComposablePlayerTests, player_can_parse_parameters_from_file) {
   EXPECT_DOUBLE_EQ(play_options.playback_duration.seconds(), -1.0);
   EXPECT_EQ(play_options.playback_until_timestamp, -2500000000LL);
   EXPECT_EQ(play_options.start_offset, 999999999);
+  EXPECT_EQ(play_options.disable_keyboard_controls, true);
   EXPECT_EQ(play_options.wait_acked_timeout, -999999999);
   EXPECT_EQ(play_options.disable_loan_message, false);
+  EXPECT_EQ(play_options.publish_service_requests, false);
+  EXPECT_EQ(
+    play_options.service_requests_source,
+    rosbag2_transport::ServiceRequestsSource::CLIENT_INTROSPECTION);
+  EXPECT_EQ(play_options.message_order, rosbag2_transport::MessageOrder::SENT_TIMESTAMP);
 
-  EXPECT_EQ(storage_options.uri, uri_str);
-  EXPECT_EQ(storage_options.storage_id, GetParam());
-  EXPECT_EQ(storage_options.storage_config_uri, "");
-  EXPECT_EQ(storage_options.max_bagfile_size, 12345);
-  EXPECT_EQ(storage_options.max_bagfile_duration, 54321);
-  EXPECT_EQ(storage_options.max_cache_size, 9898);
-  EXPECT_EQ(storage_options.storage_preset_profile, "resilient");
-  EXPECT_EQ(storage_options.snapshot_mode, false);
+  ASSERT_EQ(1, storage_options.size());
+  EXPECT_EQ(storage_options[0].uri, uri_str);
+  EXPECT_EQ(storage_options[0].storage_id, GetParam());
+  EXPECT_EQ(storage_options[0].storage_config_uri, "");
+  EXPECT_EQ(storage_options[0].max_bagfile_size, 12345);
+  EXPECT_EQ(storage_options[0].max_bagfile_duration, 54321);
+  EXPECT_EQ(storage_options[0].max_cache_size, 9898);
+  EXPECT_EQ(storage_options[0].storage_preset_profile, "resilient");
+  EXPECT_EQ(storage_options[0].snapshot_mode, false);
   std::unordered_map<std::string, std::string> custom_data{
     std::pair{"key1", "value1"},
     std::pair{"key2", "value2"}
   };
-  EXPECT_EQ(storage_options.custom_data, custom_data);
+  EXPECT_EQ(storage_options[0].custom_data, custom_data);
 }
 
 TEST_P(ComposablePlayerIntegrationTests, player_can_automatically_play_file_after_composition) {

@@ -76,7 +76,7 @@ TEST_P(RecordFixture, record_end_to_end_test_with_zstd_file_compression) {
     " --compression-mode file" <<
     " --compression-format " << compression_format <<
     " --max-cache-size 0" <<
-    " " << topic_name;
+    " --topics " << topic_name;
 
   auto process_handle = start_execution(cmd.str());
   auto cleanup_process_handle = rcpputils::make_scope_exit(
@@ -135,7 +135,7 @@ TEST_P(RecordFixture, record_end_to_end_test) {
   pub_manager.setup_publisher("/unrecorded_topic", unrecorded_message, 3);
 
   auto process_handle = start_execution(
-    get_base_record_command() + " --max-cache-size 0 /test_topic");
+    get_base_record_command() + " --max-cache-size 0 --topics /test_topic");
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
       stop_execution(process_handle);
@@ -177,7 +177,7 @@ TEST_P(RecordFixture, record_end_to_end_test_start_paused) {
   pub_manager.setup_publisher("/test_topic", message, 10);
 
   auto process_handle = start_execution(
-    get_base_record_command() + " --max-cache-size 0 --start-paused /test_topic");
+    get_base_record_command() + " --max-cache-size 0 --start-paused --topics /test_topic");
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
       stop_execution(process_handle);
@@ -206,7 +206,7 @@ TEST_P(RecordFixture, record_end_to_end_exits_gracefully_on_sigterm) {
   rosbag2_test_common::PublicationManager pub_manager;
   pub_manager.setup_publisher(topic_name, message, 10);
   auto process_handle = start_execution(
-    get_base_record_command() + " " + topic_name);
+    get_base_record_command() + " --topics " + topic_name);
 
   ASSERT_TRUE(pub_manager.wait_for_matched(topic_name.c_str())) <<
     "Expected find rosbag subscription";
@@ -292,7 +292,7 @@ TEST_P(RecordFixture, record_end_to_end_with_splitting_bagsize_split_is_at_least
   std::stringstream command;
   command << get_base_record_command() <<
     " --max-bag-size " << bagfile_split_size <<
-    " " << topic_name;
+    " --topics " << topic_name;
   auto process_handle = start_execution(command.str());
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
@@ -302,12 +302,12 @@ TEST_P(RecordFixture, record_end_to_end_with_splitting_bagsize_split_is_at_least
   ASSERT_TRUE(pub_manager.wait_for_matched(topic_name)) <<
     "Expected find rosbag subscription";
 
+  pub_manager.run_publishers();
+
   wait_for_storage_file();
 
   stop_execution(process_handle);
   cleanup_process_handle.cancel();
-
-  pub_manager.run_publishers();
 
   finalize_metadata_kludge(expected_splits);
   wait_for_metadata();
@@ -315,10 +315,7 @@ TEST_P(RecordFixture, record_end_to_end_with_splitting_bagsize_split_is_at_least
   const auto metadata = metadata_io.read_metadata(root_bag_path_.generic_string());
   const auto actual_splits = static_cast<int>(metadata.files.size());
 
-  // TODO(zmichaels11): Support reliable sync-to-disk for more accurate splits.
-  // The only guarantee with splits right now is that they will not occur until
-  // a bagfile is at least the specified max_bagfile_size.
-  EXPECT_GT(actual_splits, 0);
+  EXPECT_EQ(actual_splits, expected_splits);
 
   // Don't include the last bagfile since it won't be full
   for (int i = 0; i < actual_splits - 1; ++i) {
@@ -347,7 +344,7 @@ TEST_P(RecordFixture, record_end_to_end_with_splitting_max_size_not_reached) {
   std::stringstream command;
   command << get_base_record_command() <<
     " --max-bag-size " << bagfile_split_size <<
-    " " << topic_name;
+    " --topics " << topic_name;
   auto process_handle = start_execution(command.str());
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
@@ -397,7 +394,7 @@ TEST_P(RecordFixture, record_end_to_end_with_splitting_splits_bagfile) {
   std::stringstream command;
   command << get_base_record_command() <<
     " --max-bag-size " << bagfile_split_size <<
-    " " << topic_name;
+    " --topics " << topic_name;
   auto process_handle = start_execution(command.str());
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
@@ -444,7 +441,7 @@ TEST_P(RecordFixture, record_end_to_end_with_duration_splitting_splits_bagfile) 
   std::stringstream command;
   command << get_base_record_command() <<
     " -d " << bagfile_split_duration <<
-    " " << topic_name;
+    " --topics " << topic_name;
   auto process_handle = start_execution(command.str());
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
@@ -490,7 +487,7 @@ TEST_P(RecordFixture, record_end_to_end_test_with_zstd_file_compression_compress
     " --max-bag-size " << bagfile_split_size <<
     " --compression-mode file" <<
     " --compression-format zstd"
-    " " << topic_name;
+    " --topics " << topic_name;
 
   auto process_handle = start_execution(command.str());
   auto cleanup_process_handle = rcpputils::make_scope_exit(
@@ -535,14 +532,30 @@ TEST_P(RecordFixture, record_fails_gracefully_if_bag_already_exists) {
   EXPECT_THAT(error_output, HasSubstr("Output folder 'empty_dir' already exists"));
 }
 
-TEST_P(RecordFixture, record_fails_if_both_all_and_topic_list_is_specified) {
-  internal::CaptureStderr();
-  auto exit_code = execute_and_wait_until_completion(
-    get_base_record_command() + " -a /some_topic", temporary_dir_path_);
-  auto error_output = internal::GetCapturedStderr();
+TEST_P(RecordFixture, record_if_topic_list_service_list_and_all_are_specified) {
+  auto message = get_messages_strings()[0];
+  message->string_value = "test";
 
-  EXPECT_THAT(exit_code, Eq(EXIT_FAILURE));
-  EXPECT_FALSE(error_output.empty());
+  rosbag2_test_common::PublicationManager pub_manager;
+  pub_manager.setup_publisher("/test_topic", message, 10);
+
+  internal::CaptureStdout();
+  auto process_handle = start_execution(
+    get_base_record_command() +
+    " -a --all-topics --all-services --topics /test_topic --services /service1");
+  auto cleanup_process_handle = rcpputils::make_scope_exit(
+    [process_handle]() {
+      stop_execution(process_handle);
+    });
+
+  ASSERT_TRUE(pub_manager.wait_for_matched("/test_topic")) <<
+    "Expected find rosbag subscription";
+  auto output = internal::GetCapturedStdout();
+  stop_execution(process_handle);
+  cleanup_process_handle.cancel();
+
+  EXPECT_THAT(output, HasSubstr("--all or --all-topics will override --topics"));
+  EXPECT_THAT(output, HasSubstr("--all or --all-services will override --services"));
 }
 
 TEST_P(RecordFixture, record_fails_if_neither_all_nor_topic_list_are_specified) {
@@ -579,8 +592,8 @@ TEST_P(RecordFixture, record_end_to_end_test_with_cache) {
 
   auto process_handle = start_execution(
     get_base_record_command() +
-    " " + topic_name + " " +
-    "--max-cache-size " + std::to_string(max_cache_size));
+    " --topics " + topic_name +
+    " --max-cache-size " + std::to_string(max_cache_size));
   auto cleanup_process_handle = rcpputils::make_scope_exit(
     [process_handle]() {
       stop_execution(process_handle);

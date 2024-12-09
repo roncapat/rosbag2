@@ -2,6 +2,48 @@
 Changelog for package rosbag2_transport
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.30.0 (2024-11-26)
+-------------------
+* Reintroduce `Don't warn for unknown types if topics are not selected` (`#1825 <https://github.com/ros2/rosbag2/issues/1825>`_)
+* Allow unknown types in bag rewrite (`#1812 <https://github.com/ros2/rosbag2/issues/1812>`_)
+* Improve the reliability of rosbag2 tests (`#1796 <https://github.com/ros2/rosbag2/issues/1796>`_)
+* Contributors: Alejandro Hernández Cordero, Chris Lalancette, Michael Orlov, Ramon Wijnands, Roman
+
+0.29.0 (2024-09-03)
+-------------------
+* Removed warnings (`#1794 <https://github.com/ros2/rosbag2/issues/1794>`_)
+* Small cleanups to the rosbag2 tests. (`#1792 <https://github.com/ros2/rosbag2/issues/1792>`_)
+* Add cli option compression-threads-priority (`#1768 <https://github.com/ros2/rosbag2/issues/1768>`_)
+* [WIP] Remove rcpputils::fs dependencies in rosbag2 packages (`#1740 <https://github.com/ros2/rosbag2/issues/1740>`_)
+* Bugfix for bag_split event callbacks called to early with file compression (`#1643 <https://github.com/ros2/rosbag2/issues/1643>`_)
+* Contributors: Alejandro Hernández Cordero, Chris Lalancette, Michael Orlov, Roman
+
+0.28.0 (2024-06-17)
+-------------------
+* Bugfix for issue where unable to create composable nodes with compression (`#1679 <https://github.com/ros2/rosbag2/issues/1679>`_)
+* Add support for "all" and "exclude" in RecordOptions YAML decoder (`#1664 <https://github.com/ros2/rosbag2/issues/1664>`_)
+* Add unit tests to cover message's send and received timestamps during recording (`#1641 <https://github.com/ros2/rosbag2/issues/1641>`_)
+* Contributors: Michael Orlov
+
+0.27.0 (2024-04-30)
+-------------------
+* Removed warnings - unqualified-std-cast-call (`#1618 <https://github.com/ros2/rosbag2/issues/1618>`_)
+* Contributors: Alejandro Hernández Cordero
+
+0.26.1 (2024-04-17)
+-------------------
+
+0.26.0 (2024-04-16)
+-------------------
+* Add node name to the Read(Write)SplitEvent message (`#1609 <https://github.com/ros2/rosbag2/issues/1609>`_)
+* Add option to disable recorder keyboard controls (`#1607 <https://github.com/ros2/rosbag2/issues/1607>`_)
+* Support service 2/2 --- rosbag2 service play (`#1481 <https://github.com/ros2/rosbag2/issues/1481>`_)
+* Use middleware send and receive timestamps from message_info during recording (`#1531 <https://github.com/ros2/rosbag2/issues/1531>`_)
+* Update to use yaml-cpp version 0.8.0. (`#1605 <https://github.com/ros2/rosbag2/issues/1605>`_)
+* Gracefully handle SIGINT and SIGTERM signals for play and burst CLI (`#1557 <https://github.com/ros2/rosbag2/issues/1557>`_)
+* Added exclude-topic-types to record (`#1582 <https://github.com/ros2/rosbag2/issues/1582>`_)
+* Contributors: Alejandro Hernández Cordero, Barry Xu, Bernd Pfrommer, Chris Lalancette, Michael Orlov, jmachowinski
+
 0.25.0 (2024-03-27)
 -------------------
 * Use std::filesystem instead of rcpputils::fs (`#1576 <https://github.com/ros2/rosbag2/issues/1576>`_)

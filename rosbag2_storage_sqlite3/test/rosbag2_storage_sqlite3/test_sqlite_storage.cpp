@@ -71,9 +71,26 @@ TEST_F(StorageTestFixture, string_messages_are_written_and_read_to_and_from_sqli
   ASSERT_THAT(read_messages, SizeIs(3));
   for (size_t i = 0; i < 3; i++) {
     EXPECT_THAT(deserialize_message(read_messages[i]->serialized_data), Eq(string_messages[i]));
-    EXPECT_THAT(read_messages[i]->time_stamp, Eq(std::get<1>(messages[i])));
+    EXPECT_THAT(read_messages[i]->recv_timestamp, Eq(std::get<1>(messages[i])));
     EXPECT_THAT(read_messages[i]->topic_name, Eq(topics[i]));
   }
+}
+
+TEST_F(StorageTestFixture, check_get_bagfile_size_in_read_only_mode) {
+  std::vector<std::tuple<std::string, int64_t, std::string, std::string, std::string>>
+  string_messages =
+  {std::make_tuple("first message", 1, "topic1", "type1", ""),
+    std::make_tuple("second message", 2, "topic2", "type2", "")};
+
+  write_messages_to_sqlite(string_messages);
+  std::unique_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> readable_storage =
+    std::make_unique<rosbag2_storage_plugins::SqliteStorage>();
+
+  const auto bag_path = std::filesystem::path(temporary_dir_path_) / "rosbag.db3";
+  auto db_filename = bag_path.generic_string();
+  readable_storage->open({db_filename, kPluginID});
+
+  EXPECT_EQ(readable_storage->get_bagfile_size(), std::filesystem::file_size(bag_path));
 }
 
 TEST_F(StorageTestFixture, has_next_return_false_if_there_are_no_more_messages) {
@@ -111,10 +128,10 @@ TEST_F(StorageTestFixture, get_next_returns_messages_in_timestamp_order) {
 
   EXPECT_TRUE(readable_storage->has_next());
   auto first_message = readable_storage->read_next();
-  EXPECT_THAT(first_message->time_stamp, Eq(2));
+  EXPECT_THAT(first_message->recv_timestamp, Eq(2));
   EXPECT_TRUE(readable_storage->has_next());
   auto second_message = readable_storage->read_next();
-  EXPECT_THAT(second_message->time_stamp, Eq(6));
+  EXPECT_THAT(second_message->recv_timestamp, Eq(6));
   EXPECT_FALSE(readable_storage->has_next());
 }
 
@@ -343,7 +360,7 @@ TEST_F(StorageTestFixture, messages_readable_for_prefoxy_db_schema) {
   ASSERT_THAT(read_messages, SizeIs(3));
   for (size_t i = 0; i < 3; i++) {
     EXPECT_THAT(deserialize_message(read_messages[i]->serialized_data), Eq(string_messages[i]));
-    EXPECT_THAT(read_messages[i]->time_stamp, Eq(std::get<1>(messages[i])));
+    EXPECT_THAT(read_messages[i]->recv_timestamp, Eq(std::get<1>(messages[i])));
     EXPECT_THAT(read_messages[i]->topic_name, Eq(topics[i]));
   }
 }
@@ -561,98 +578,6 @@ TEST_F(StorageTestFixture, does_not_throw_on_message_too_big) {
       {msg, 0, "/too_big_message", "some_type", "some_rmw"}
     }, writable_storage);
   });
-}
-
-TEST_F(StorageTestFixture, read_next_returns_filtered_messages_regex) {
-  std::vector<std::tuple<std::string, int64_t, std::string, std::string, std::string>>
-  string_messages =
-  {std::make_tuple("topic1 message", 1, "prefix_topic1", "", ""),
-    std::make_tuple("topic2 message", 2, "topic2", "", ""),
-    std::make_tuple("topic3 message", 3, "topic3", "", "")};
-
-  write_messages_to_sqlite(string_messages);
-  std::unique_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> readable_storage =
-    std::make_unique<rosbag2_storage_plugins::SqliteStorage>();
-
-  auto db_filename = (std::filesystem::path(temporary_dir_path_) / "rosbag.db3").generic_string();
-  readable_storage->open({db_filename, kPluginID});
-
-  rosbag2_storage::StorageFilter storage_filter;
-  storage_filter.topics_regex = "topic.*";
-  readable_storage->set_filter(storage_filter);
-
-  EXPECT_TRUE(readable_storage->has_next());
-  auto first_message = readable_storage->read_next();
-  EXPECT_THAT(first_message->topic_name, Eq("topic2"));
-  EXPECT_TRUE(readable_storage->has_next());
-  auto second_message = readable_storage->read_next();
-  EXPECT_THAT(second_message->topic_name, Eq("topic3"));
-  EXPECT_FALSE(readable_storage->has_next());
-
-  // Test reset filter
-  std::unique_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> readable_storage2 =
-    std::make_unique<rosbag2_storage_plugins::SqliteStorage>();
-
-  readable_storage2->open({db_filename, kPluginID});
-  readable_storage2->set_filter(storage_filter);
-  readable_storage2->reset_filter();
-
-  EXPECT_TRUE(readable_storage2->has_next());
-  auto third_message = readable_storage2->read_next();
-  EXPECT_THAT(third_message->topic_name, Eq("prefix_topic1"));
-  EXPECT_TRUE(readable_storage2->has_next());
-  auto fourth_message = readable_storage2->read_next();
-  EXPECT_THAT(fourth_message->topic_name, Eq("topic2"));
-  EXPECT_TRUE(readable_storage2->has_next());
-  auto fifth_message = readable_storage2->read_next();
-  EXPECT_THAT(fifth_message->topic_name, Eq("topic3"));
-  EXPECT_FALSE(readable_storage2->has_next());
-}
-
-TEST_F(StorageTestFixture, read_next_returns_filtered_messages_topics_regex_to_exclude) {
-  std::vector<std::tuple<std::string, int64_t, std::string, std::string, std::string>>
-  string_messages =
-  {std::make_tuple("topic1 message", 1, "prefix_topic1", "", ""),
-    std::make_tuple("topic2 message", 2, "topic2", "", ""),
-    std::make_tuple("topic3 message", 3, "topic3", "", "")};
-
-  write_messages_to_sqlite(string_messages);
-  std::unique_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> readable_storage =
-    std::make_unique<rosbag2_storage_plugins::SqliteStorage>();
-
-  auto db_filename = (std::filesystem::path(temporary_dir_path_) / "rosbag.db3").generic_string();
-  readable_storage->open({db_filename, kPluginID});
-
-  rosbag2_storage::StorageFilter storage_filter;
-  storage_filter.topics_regex_to_exclude = "prefix.*";
-  readable_storage->set_filter(storage_filter);
-
-  EXPECT_TRUE(readable_storage->has_next());
-  auto first_message = readable_storage->read_next();
-  EXPECT_THAT(first_message->topic_name, Eq("topic2"));
-  EXPECT_TRUE(readable_storage->has_next());
-  auto second_message = readable_storage->read_next();
-  EXPECT_THAT(second_message->topic_name, Eq("topic3"));
-  EXPECT_FALSE(readable_storage->has_next());
-
-  // Test reset filter
-  std::unique_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> readable_storage2 =
-    std::make_unique<rosbag2_storage_plugins::SqliteStorage>();
-
-  readable_storage2->open({db_filename, kPluginID});
-  readable_storage2->set_filter(storage_filter);
-  readable_storage2->reset_filter();
-
-  EXPECT_TRUE(readable_storage2->has_next());
-  auto third_message = readable_storage2->read_next();
-  EXPECT_THAT(third_message->topic_name, Eq("prefix_topic1"));
-  EXPECT_TRUE(readable_storage2->has_next());
-  auto fourth_message = readable_storage2->read_next();
-  EXPECT_THAT(fourth_message->topic_name, Eq("topic2"));
-  EXPECT_TRUE(readable_storage2->has_next());
-  auto fifth_message = readable_storage2->read_next();
-  EXPECT_THAT(fifth_message->topic_name, Eq("topic3"));
-  EXPECT_FALSE(readable_storage2->has_next());
 }
 
 TEST(StoragePresetProfileValidation, parse_storage_preset_profile_works) {

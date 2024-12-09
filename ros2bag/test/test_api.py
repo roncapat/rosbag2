@@ -12,14 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
 import unittest
 
-from rclpy.qos import QoSDurabilityPolicy
-from rclpy.qos import QoSHistoryPolicy
-from rclpy.qos import QoSReliabilityPolicy
+from rclpy.qos import DurabilityPolicy
+from rclpy.qos import HistoryPolicy
+from rclpy.qos import ReliabilityPolicy
 from ros2bag.api import convert_yaml_to_qos_profile
 from ros2bag.api import dict_to_duration
+from ros2bag.api import input_bag_arg_to_storage_options
 from ros2bag.api import interpret_dict_as_qos_profile
+
+
+RESOURCES_PATH = Path(__file__).parent / 'resources'
 
 
 class TestRos2BagRecord(unittest.TestCase):
@@ -38,7 +43,7 @@ class TestRos2BagRecord(unittest.TestCase):
     def test_interpret_dict_as_qos_profile_valid(self):
         qos_dict = {'history': 'keep_last', 'depth': 10}
         qos_profile = interpret_dict_as_qos_profile(qos_dict)
-        assert qos_profile.history == QoSHistoryPolicy.KEEP_LAST
+        assert qos_profile.history == HistoryPolicy.KEEP_LAST
         expected_seconds = 1
         expected_nanoseconds = int((expected_seconds * 1e9))
         qos_dict = {'history': 'keep_all', 'deadline': {'sec': expected_seconds, 'nsec': 0}}
@@ -65,15 +70,11 @@ class TestRos2BagRecord(unittest.TestCase):
                 'history': 'keep_all', 'avoid_ros_namespace_conventions': expected_convention}
         }
         qos_profiles = convert_yaml_to_qos_profile(qos_dict)
-        assert qos_profiles[topic_name_1].durability == \
-            QoSDurabilityPolicy.VOLATILE
-        assert qos_profiles[topic_name_1].reliability == \
-            QoSReliabilityPolicy.RELIABLE
-        assert qos_profiles[topic_name_1].history == \
-            QoSHistoryPolicy.KEEP_ALL
+        assert qos_profiles[topic_name_1].durability == DurabilityPolicy.VOLATILE
+        assert qos_profiles[topic_name_1].reliability == ReliabilityPolicy.RELIABLE
+        assert qos_profiles[topic_name_1].history == HistoryPolicy.KEEP_ALL
         assert qos_profiles[topic_name_2].avoid_ros_namespace_conventions == expected_convention
-        assert qos_profiles[topic_name_2].history == \
-            QoSHistoryPolicy.KEEP_ALL
+        assert qos_profiles[topic_name_2].history == HistoryPolicy.KEEP_ALL
 
     def test_interpret_dict_as_qos_profile_negative(self):
         qos_dict = {'history': 'keep_all', 'depth': -1}
@@ -88,3 +89,25 @@ class TestRos2BagRecord(unittest.TestCase):
         qos_dict = {'history': 'keep_all', 'liveliness_lease_duration': {'sec': -1, 'nsec': -1}}
         with self.assertRaises(ValueError):
             interpret_dict_as_qos_profile(qos_dict)
+
+    def test_input_bag_arg_to_storage_options(self):
+        bag_path = (RESOURCES_PATH / 'empty_bag').as_posix()
+        # Just use a file that exists; the content does not matter
+        storage_config_file = (RESOURCES_PATH / 'qos_profile.yaml').as_posix()
+
+        with self.assertRaises(ValueError):
+            input_bag_arg_to_storage_options([['path1', 'id1'], ['path2', 'id2', 'extra']])
+        with self.assertRaises(ValueError):
+            input_bag_arg_to_storage_options([['path-does-not-exist']])
+        with self.assertRaises(ValueError):
+            input_bag_arg_to_storage_options([[bag_path, 'id-does-not-exist']])
+        with self.assertRaises(ValueError):
+            input_bag_arg_to_storage_options([[bag_path, 'mcap']], 'config-file-doesnt-exist')
+
+        self.assertEqual([], input_bag_arg_to_storage_options([], None))
+        storage_options = input_bag_arg_to_storage_options(
+            [[bag_path, 'mcap']], storage_config_file)
+        self.assertEqual(1, len(storage_options))
+        self.assertEqual(bag_path, storage_options[0].uri)
+        self.assertEqual('mcap', storage_options[0].storage_id)
+        self.assertEqual(storage_config_file, storage_options[0].storage_config_uri)

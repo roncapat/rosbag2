@@ -35,6 +35,13 @@ public:
   : Player(std::move(reader), storage_options, play_options, node_name)
   {}
 
+  MockPlayer(
+    std::vector<rosbag2_transport::Player::reader_storage_options_pair_t> && input_bags,
+    const rosbag2_transport::PlayOptions & play_options,
+    const std::string & node_name = "rosbag2_mock_player")
+  : Player(std::move(input_bags), play_options, node_name)
+  {}
+
   explicit MockPlayer(
     const std::string & node_name = "rosbag2_mock_composable_player",
     const rclcpp::NodeOptions & node_options = rclcpp::NodeOptions())
@@ -56,6 +63,18 @@ public:
     return pub_list;
   }
 
+  std::vector<rclcpp::ClientBase *> get_list_of_clients()
+  {
+    std::vector<rclcpp::ClientBase *> cli_list;
+    for (const auto & client : this->get_service_clients()) {
+      cli_list.push_back(
+        static_cast<rclcpp::ClientBase *>(
+          client.second.get()));
+    }
+
+    return cli_list;
+  }
+
   size_t get_number_of_registered_pre_callbacks()
   {
     return get_number_of_registered_on_play_msg_pre_callbacks();
@@ -67,7 +86,7 @@ public:
   }
 
   using rosbag2_transport::Player::wait_for_playback_to_start;
-  using rosbag2_transport::Player::get_storage_options;
+  using rosbag2_transport::Player::get_all_storage_options;
   using rosbag2_transport::Player::get_play_options;
 };
 

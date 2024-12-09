@@ -2,6 +2,40 @@
 Changelog for package ros2bag
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.30.0 (2024-11-26)
+-------------------
+* Rename rclpy.qos.QoS*Policy to rclpy.qos.*Policy (`#1832 <https://github.com/ros2/rosbag2/issues/1832>`_)
+* Add "--sort" CLI option to the "ros2 bag info" command (`#1804 <https://github.com/ros2/rosbag2/issues/1804>`_)
+* Contributors: Alejandro Hernández Cordero, Christophe Bedard, Nicola Loi, Roman, Sanoronas
+
+0.29.0 (2024-09-03)
+-------------------
+* Add cli option compression-threads-priority (`#1768 <https://github.com/ros2/rosbag2/issues/1768>`_)
+* Add computation of size contribution to info verb (`#1726 <https://github.com/ros2/rosbag2/issues/1726>`_)
+* Contributors: Nicola Loi, Roman
+
+0.28.0 (2024-06-17)
+-------------------
+* fix(start-offset): allow specifying a start offset of 0 (`#1682 <https://github.com/ros2/rosbag2/issues/1682>`_)
+* Exclude recorded /clock topic when --clock option is specified (`#1646 <https://github.com/ros2/rosbag2/issues/1646>`_)
+* Sweep cleanup in rosbag2 recorder CLI args verification code (`#1633 <https://github.com/ros2/rosbag2/issues/1633>`_)
+* Add --log-level to ros2 bag play and record (`#1625 <https://github.com/ros2/rosbag2/issues/1625>`_)
+* Add optional  '--topics' CLI argument for 'ros2 bag record' (`#1632 <https://github.com/ros2/rosbag2/issues/1632>`_)
+* Contributors: Kosuke Takeuchi, Michael Orlov, Rein Appeldoorn, Roman
+
+0.27.0 (2024-04-30)
+-------------------
+
+0.26.1 (2024-04-17)
+-------------------
+
+0.26.0 (2024-04-16)
+-------------------
+* Add option to disable recorder keyboard controls (`#1607 <https://github.com/ros2/rosbag2/issues/1607>`_)
+* Support service 2/2 --- rosbag2 service play (`#1481 <https://github.com/ros2/rosbag2/issues/1481>`_)
+* Added exclude-topic-types to record (`#1582 <https://github.com/ros2/rosbag2/issues/1582>`_)
+* Contributors: Alejandro Hernández Cordero, Barry Xu, Bernd Pfrommer, Michael Orlov
+
 0.25.0 (2024-03-27)
 -------------------
 * Overhaul in the rosbag2_transport::TopicFilter class and relevant tests (`#1585 <https://github.com/ros2/rosbag2/issues/1585>`_)

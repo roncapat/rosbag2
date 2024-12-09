@@ -153,6 +153,11 @@ protected:
   std::shared_ptr<rosbag2_cpp::cache::MessageCacheInterface> message_cache_;
   std::unique_ptr<rosbag2_cpp::cache::CacheConsumer> cache_consumer_;
 
+  std::string split_bagfile_local(bool execute_callbacks = true);
+
+  void execute_bag_split_callbacks(
+    const std::string & closed_file, const std::string & opened_file);
+
   void switch_to_next_storage();
 
   std::string format_storage_uri(
@@ -162,6 +167,9 @@ protected:
 
   // Used to track topic -> message count. If cache is present, it is updated by CacheConsumer
   std::unordered_map<std::string, rosbag2_storage::TopicInformation> topics_names_to_info_;
+  // Note: topics_names_to_info_ needs to be protected with mutex only when we are explicitly
+  // adding or deleting items (create_topic(..)/remove_topic(..)) and when we access it from
+  // CacheConsumer callback i.e., write_messages(..)
   std::mutex topics_info_mutex_;
 
   LocalMessageDefinitionSource message_definitions_;
@@ -197,6 +205,7 @@ private:
   void write_messages(
     const std::vector<std::shared_ptr<const rosbag2_storage::SerializedBagMessage>> & messages);
   bool is_first_message_ {true};
+  std::atomic_bool is_open_{false};
 
   bag_events::EventCallbackManager callback_manager_;
 };

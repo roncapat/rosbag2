@@ -44,6 +44,7 @@ TEST_F(RecordIntegrationTestFixture, record_all_without_discovery_ignores_later_
   recorder->record();
 
   start_async_spin(recorder);
+  auto cleanup_process_handle = rcpputils::make_scope_exit([&]() {stop_spinning();});
 
   rosbag2_test_common::PublicationManager pub_manager;
   pub_manager.setup_publisher(topic, string_message, 5);
@@ -53,13 +54,13 @@ TEST_F(RecordIntegrationTestFixture, record_all_without_discovery_ignores_later_
   MockSequentialWriter & mock_writer =
     static_cast<MockSequentialWriter &>(writer.get_implementation_handle());
 
-  size_t expected_messages = 0;
-  rosbag2_test_common::wait_until_shutdown(
-    std::chrono::seconds(2),
-    [&mock_writer, &expected_messages]() {
+  constexpr size_t expected_messages = 0;
+  rosbag2_test_common::wait_until_condition(
+    [ =, &mock_writer]() {
       return mock_writer.get_messages().size() > expected_messages;
-    });
-  (void) expected_messages;  // we can't say anything here, there might be some rosout
+    },
+    std::chrono::seconds(2));
+  // We can't EXPECT anything here, since there may be some messages from rosout
 
   auto recorded_topics = mock_writer.get_topics();
   EXPECT_EQ(0u, recorded_topics.count(topic));

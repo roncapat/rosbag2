@@ -132,11 +132,30 @@ PlayOptions get_play_options_from_node_params(rclcpp::Node & node)
   play_options.topics_to_filter = node.declare_parameter<std::vector<std::string>>(
     "play.topics_to_filter", std::vector<std::string>());
 
-  play_options.topics_regex_to_filter =
-    node.declare_parameter<std::string>("play.topics_regex_to_filter", "");
+  // Convert service name to service event topic name
+  auto service_list = node.declare_parameter<std::vector<std::string>>(
+    "play.services_to_filter", std::vector<std::string>());
+  for (auto & service : service_list) {
+    service = rosbag2_cpp::service_name_to_service_event_topic_name(service);
+  }
+  play_options.services_to_filter = service_list;
 
-  play_options.topics_regex_to_exclude =
-    node.declare_parameter<std::string>("play.topics_regex_to_exclude", "");
+  play_options.regex_to_filter =
+    node.declare_parameter<std::string>("play.regex_to_filter", "");
+
+  play_options.exclude_regex_to_filter =
+    node.declare_parameter<std::string>("play.exclude_regex_to_filter", "");
+
+  play_options.exclude_topics_to_filter = node.declare_parameter<std::vector<std::string>>(
+    "play.exclude_topics_to_filter", std::vector<std::string>());
+
+  // Convert service name to service event topic name
+  auto exclude_service_list = node.declare_parameter<std::vector<std::string>>(
+    "play.exclude_services_to_filter", std::vector<std::string>());
+  for (auto & service : exclude_service_list) {
+    service = rosbag2_cpp::service_name_to_service_event_topic_name(service);
+  }
+  play_options.exclude_services_to_filter = exclude_service_list;
 
   std::string qos_profile_overrides_path =
     node.declare_parameter<std::string>("play.qos_profile_overrides_path", "");
@@ -198,6 +217,40 @@ PlayOptions get_play_options_from_node_params(rclcpp::Node & node)
 
   play_options.disable_loan_message =
     node.declare_parameter<bool>("play.disable_loan_message", false);
+
+  // "SERVICE_INTROSPECTION" or "CLIENT_INTROSPECTION"
+  auto service_requests_source =
+    node.declare_parameter<std::string>("play.service_requests_source", "SERVICE_INTROSPECTION");
+  if (service_requests_source == "SERVICE_INTROSPECTION") {
+    play_options.service_requests_source = ServiceRequestsSource::SERVICE_INTROSPECTION;
+  } else if (service_requests_source == "CLIENT_INTROSPECTION") {
+    play_options.service_requests_source = ServiceRequestsSource::CLIENT_INTROSPECTION;
+  } else {
+    play_options.service_requests_source = ServiceRequestsSource::SERVICE_INTROSPECTION;
+    RCLCPP_ERROR(
+      node.get_logger(),
+      "play.service_requests_source doesn't support %s. It must be one of SERVICE_INTROSPECTION"
+      " and CLIENT_INTROSPECTION. Changed it to default value SERVICE_INTROSPECTION.",
+      service_requests_source.c_str());
+  }
+
+  play_options.publish_service_requests =
+    node.declare_parameter<bool>("play.publish_service_request", false);
+
+  auto message_order =
+    node.declare_parameter<std::string>("play.message_order", "RECEIVED_TIMESTAMP");
+  if (message_order == "RECEIVED_TIMESTAMP") {
+    play_options.message_order = MessageOrder::RECEIVED_TIMESTAMP;
+  } else if (message_order == "SENT_TIMESTAMP") {
+    play_options.message_order = MessageOrder::SENT_TIMESTAMP;
+  } else {
+    play_options.message_order = MessageOrder::RECEIVED_TIMESTAMP;
+    RCLCPP_ERROR(
+      node.get_logger(),
+      "play.message_order doesn't support %s. It must be one of RECEIVED_TIMESTAMP"
+      " and SENT_TIMESTAMP. Changed it to default value RECEIVED_TIMESTAMP.",
+      message_order.c_str());
+  }
 
   return play_options;
 }
@@ -294,6 +347,9 @@ RecordOptions get_record_options_from_node_params(rclcpp::Node & node)
     node.declare_parameter<bool>("record.ignore_leaf_topics", false);
 
   record_options.start_paused = node.declare_parameter<bool>("record.start_paused", false);
+
+  record_options.disable_keyboard_controls =
+    node.declare_parameter<bool>("record.disable_keyboard_controls", false);
 
   record_options.use_sim_time = node.get_parameter("use_sim_time").get_value<bool>();
 

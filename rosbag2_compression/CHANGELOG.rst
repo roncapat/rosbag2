@@ -2,6 +2,35 @@
 Changelog for package rosbag2_compression
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.30.0 (2024-11-26)
+-------------------
+* Bugfix: Update metadata with new file_info before saving it first time (`#1843 <https://github.com/ros2/rosbag2/issues/1843>`_)
+* Make snapshot writing into a new file each time it is triggered (`#1842 <https://github.com/ros2/rosbag2/issues/1842>`_)
+* Contributors: Alejandro Hernández Cordero, Michael Orlov, Roman
+
+0.29.0 (2024-09-03)
+-------------------
+* Add cli option compression-threads-priority (`#1768 <https://github.com/ros2/rosbag2/issues/1768>`_)
+* Bugfix for bag_split event callbacks called to early with file compression (`#1643 <https://github.com/ros2/rosbag2/issues/1643>`_)
+* Contributors: Michael Orlov, Roman
+
+0.28.0 (2024-06-17)
+-------------------
+* Fix for regression in `open_succeeds_twice` and `minimal_writer_example` tests (`#1667 <https://github.com/ros2/rosbag2/issues/1667>`_)
+* Bugfix for writer not being able to open again after closing (`#1599 <https://github.com/ros2/rosbag2/issues/1599>`_)
+* Contributors: Michael Orlov, yschulz
+
+0.27.0 (2024-04-30)
+-------------------
+
+0.26.1 (2024-04-17)
+-------------------
+
+0.26.0 (2024-04-16)
+-------------------
+* Use middleware send and receive timestamps from message_info during recording (`#1531 <https://github.com/ros2/rosbag2/issues/1531>`_)
+* Contributors: jmachowinski
+
 0.25.0 (2024-03-27)
 -------------------
 * Use std::filesystem instead of rcpputils::fs (`#1576 <https://github.com/ros2/rosbag2/issues/1576>`_)

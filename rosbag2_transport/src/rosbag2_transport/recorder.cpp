@@ -42,6 +42,7 @@
 
 #include "logging.hpp"
 #include "rosbag2_transport/config_options_from_node_params.hpp"
+#include "rosbag2_transport/reader_writer_factory.hpp"
 #include "rosbag2_transport/topic_filter.hpp"
 
 namespace rosbag2_transport
@@ -177,18 +178,19 @@ RecorderImpl::RecorderImpl(
             "use_sim_time and is_discovery_disabled both set, but are incompatible settings. "
             "The /clock topic needs to be discovered to record with sim time.");
   }
-
-  std::string key_str = enum_key_code_to_str(Recorder::kPauseResumeToggleKey);
-  toggle_paused_key_callback_handle_ =
-    keyboard_handler_->add_key_press_callback(
-    [this](KeyboardHandler::KeyCode /*key_code*/,
-    KeyboardHandler::KeyModifiers /*key_modifiers*/) {this->toggle_paused();},
-    Recorder::kPauseResumeToggleKey);
+  if (!record_options.disable_keyboard_controls) {
+    std::string key_str = enum_key_code_to_str(Recorder::kPauseResumeToggleKey);
+    toggle_paused_key_callback_handle_ =
+      keyboard_handler_->add_key_press_callback(
+      [this](KeyboardHandler::KeyCode /*key_code*/,
+      KeyboardHandler::KeyModifiers /*key_modifiers*/) {this->toggle_paused();},
+      Recorder::kPauseResumeToggleKey);
+    // show instructions
+    RCLCPP_INFO_STREAM(
+      node->get_logger(),
+      "Press " << key_str << " for pausing/resuming");
+  }
   topic_filter_ = std::make_unique<TopicFilter>(record_options, node->get_node_graph_interface());
-  // show instructions
-  RCLCPP_INFO_STREAM(
-    node->get_logger(),
-    "Press " << key_str << " for pausing/resuming");
 
   for (auto & topic : record_options_.topics) {
     topic = rclcpp::expand_topic_or_service_name(
@@ -217,7 +219,11 @@ RecorderImpl::RecorderImpl(
 
 RecorderImpl::~RecorderImpl()
 {
-  keyboard_handler_->delete_key_press_callback(toggle_paused_key_callback_handle_);
+  if (keyboard_handler_ &&
+    (toggle_paused_key_callback_handle_ != KeyboardHandler::invalid_handle))
+  {
+    keyboard_handler_->delete_key_press_callback(toggle_paused_key_callback_handle_);
+  }
   stop();
 }
 
@@ -368,6 +374,7 @@ void RecorderImpl::event_publisher_thread_main()
       auto message = rosbag2_interfaces::msg::WriteSplitEvent();
       message.closed_file = bag_split_info_.closed_file;
       message.opened_file = bag_split_info_.opened_file;
+      message.node_name = node->get_fully_qualified_name();
       try {
         split_event_pub_->publish(message);
       } catch (const std::exception & e) {
@@ -561,16 +568,53 @@ std::shared_ptr<rclcpp::GenericSubscription>
 RecorderImpl::create_subscription(
   const std::string & topic_name, const std::string & topic_type, const rclcpp::QoS & qos)
 {
-  auto subscription = node->create_generic_subscription(
-    topic_name,
-    topic_type,
-    qos,
-    [this, topic_name, topic_type](std::shared_ptr<const rclcpp::SerializedMessage> message) {
-      if (!paused_.load()) {
-        writer_->write(message, topic_name, topic_type, node->get_clock()->now());
-      }
-    });
-  return subscription;
+#ifdef _WIN32
+  if (std::string(rmw_get_implementation_identifier()).find("rmw_connextdds") !=
+    std::string::npos)
+  {
+    return node->create_generic_subscription(
+      topic_name,
+      topic_type,
+      qos,
+      [this, topic_name, topic_type](std::shared_ptr<const rclcpp::SerializedMessage> message,
+      const rclcpp::MessageInfo &) {
+        if (!paused_.load()) {
+          writer_->write(
+            std::move(message), topic_name, topic_type, node->now().nanoseconds(),
+            0);
+        }
+      });
+  }
+#endif
+
+  if (record_options_.use_sim_time) {
+    return node->create_generic_subscription(
+      topic_name,
+      topic_type,
+      qos,
+      [this, topic_name, topic_type](std::shared_ptr<const rclcpp::SerializedMessage> message,
+      const rclcpp::MessageInfo & mi) {
+        if (!paused_.load()) {
+          writer_->write(
+            std::move(message), topic_name, topic_type, node->now().nanoseconds(),
+            mi.get_rmw_message_info().source_timestamp);
+        }
+      });
+  } else {
+    return node->create_generic_subscription(
+      topic_name,
+      topic_type,
+      qos,
+      [this, topic_name, topic_type](std::shared_ptr<const rclcpp::SerializedMessage> message,
+      const rclcpp::MessageInfo & mi) {
+        if (!paused_.load()) {
+          writer_->write(
+            std::move(message), topic_name, topic_type,
+            mi.get_rmw_message_info().received_timestamp,
+            mi.get_rmw_message_info().source_timestamp);
+        }
+      });
+  }
 }
 
 std::vector<rclcpp::QoS> RecorderImpl::offered_qos_profiles_for_topic(
@@ -708,14 +752,12 @@ Recorder::Recorder(
 
   RecordOptions record_options = get_record_options_from_node_params(*this);
 
-  #ifndef _WIN32
-  auto keyboard_handler = std::make_shared<KeyboardHandler>(false);
-  #else
-  // We don't have signal handler option in constructor for windows version
-  auto keyboard_handler = std::shared_ptr<KeyboardHandler>(new KeyboardHandler());
-  #endif
+  std::shared_ptr<KeyboardHandler> keyboard_handler;
+  if (!record_options.disable_keyboard_controls) {
+    keyboard_handler = std::make_shared<KeyboardHandler>();
+  }
 
-  auto writer = std::make_unique<rosbag2_cpp::Writer>();
+  auto writer = ReaderWriterFactory::make_writer(record_options);
 
   pimpl_ = std::make_unique<RecorderImpl>(
     this, std::move(writer), keyboard_handler,
@@ -731,12 +773,7 @@ Recorder::Recorder(
   const rclcpp::NodeOptions & node_options)
 : Recorder(
     std::move(writer),
-#ifndef _WIN32
-    std::make_shared<KeyboardHandler>(false),
-#else
-    // We don't have signal handler option in constructor for windows version
-    std::shared_ptr<KeyboardHandler>(new KeyboardHandler()),
-#endif
+    record_options.disable_keyboard_controls ? nullptr : std::make_shared<KeyboardHandler>(),
     storage_options,
     record_options,
     node_name,
@@ -754,7 +791,7 @@ Recorder::Recorder(
     .start_parameter_event_publisher(false)
     .append_parameter_override("use_sim_time", record_options.use_sim_time)),
   pimpl_(std::make_unique<RecorderImpl>(
-      this, std::move(writer), keyboard_handler,
+      this, std::move(writer), std::move(keyboard_handler),
       storage_options, record_options))
 {}
 

@@ -28,6 +28,19 @@
 
 namespace rosbag2_transport
 {
+enum class ServiceRequestsSource : int8_t
+{
+  SERVICE_INTROSPECTION = 0,
+  CLIENT_INTROSPECTION = 1
+};
+
+enum class MessageOrder : std::uint8_t
+{
+  // Order chronologically by message reception timestamp
+  RECEIVED_TIMESTAMP = 0,
+  // Order chronologically by message publication timestamp
+  SENT_TIMESTAMP = 1
+};
 
 struct PlayOptions
 {
@@ -38,18 +51,30 @@ public:
 
   // Topic names to whitelist when playing a bag.
   // Only messages matching these specified topics will be played.
-  // If list is empty, the filter is ignored and all messages are played.
+  // If list is empty, the filter is ignored and all messages of topics are played.
   std::vector<std::string> topics_to_filter = {};
 
-  // Regular expression of topic names to whitelist when playing a bag.
-  // Only messages matching these specified topics will be played.
-  // If list is empty, the filter is ignored and all messages are played.
-  std::string topics_regex_to_filter = "";
+  // Service names (service event topic names) to whitelist when playing a bag.
+  // Only messages matching these specified services will be played.
+  // If list is empty, the filter is ignored and all messages of services are played.
+  std::vector<std::string> services_to_filter = {};
 
-  // Regular expression of topic names to exclude when playing a bag.
-  // Only messages not matching these specified topics will be played.
+  // Regular expression of topic names and service name to whitelist when playing a bag.
+  // Only messages matching these specified topics and services will be played.
   // If list is empty, the filter is ignored and all messages are played.
-  std::string topics_regex_to_exclude = "";
+  std::string regex_to_filter = "";
+
+  // List of topic names to exclude when playing a bag.
+  // Only messages not matching these specified topics will be played.
+  std::vector<std::string> exclude_topics_to_filter = {};
+
+  // List of service names (service event topic names) to exclude when playing a bag.
+  // Only messages not matching these specified services will be played.
+  std::vector<std::string> exclude_services_to_filter = {};
+
+  // Regular expression of topic names and service name to exclude when playing a bag.
+  // Only messages not matching these specified topics and services will be played.
+  std::string exclude_regex_to_filter = "";
 
   std::unordered_map<std::string, rclcpp::QoS> topic_qos_profile_overrides = {};
   bool loop = false;
@@ -66,7 +91,7 @@ public:
   // a /clock update to be published. If list is empty, all topics will act as a trigger
   std::vector<std::string> clock_trigger_topics = {};
 
-  // Sleep before play. Negative durations invalid. Will delay at the beginning of each loop.
+  // Sleep before play. Negative durations invalid. Loops are not affected.
   rclcpp::Duration delay = rclcpp::Duration(0, 0);
 
   // Determines the maximum duration of the playback. Negative durations will make the playback to
@@ -100,6 +125,18 @@ public:
 
   // Disable to publish as loaned message
   bool disable_loan_message = false;
+
+  // Publish service requests instead of service events
+  bool publish_service_requests = false;
+
+  // The source of the service request
+  ServiceRequestsSource service_requests_source = ServiceRequestsSource::SERVICE_INTROSPECTION;
+
+  // The reference to use for bag message chronological ordering.
+  // If messages are significantly disordered (within a single bag or across multiple bags),
+  // replayed messages may not be correctly ordered. A possible solution could be to increase the
+  // read_ahead_queue_size value to buffer (and order) more messages.
+  MessageOrder message_order = MessageOrder::RECEIVED_TIMESTAMP;
 };
 
 }  // namespace rosbag2_transport

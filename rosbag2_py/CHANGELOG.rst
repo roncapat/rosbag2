@@ -2,6 +2,45 @@
 Changelog for package rosbag2_py
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.30.0 (2024-11-26)
+-------------------
+* Add in python3-dev build dependency. (`#1863 <https://github.com/ros2/rosbag2/issues/1863>`_)
+* Add "--sort" CLI option to the "ros2 bag info" command (`#1804 <https://github.com/ros2/rosbag2/issues/1804>`_)
+* Remove use of python_cmake_module (`#1570 <https://github.com/ros2/rosbag2/issues/1570>`_)
+* Contributors: Alejandro Hernández Cordero, Chris Lalancette, Michael Orlov, Nicola Loi, Roman, Sanoronas
+
+0.29.0 (2024-09-03)
+-------------------
+* Added method to introspect QoS in Python (`#1648 <https://github.com/ros2/rosbag2/issues/1648>`_)
+* Update CI scripts to use Ubuntu Noble distros and bump action scripts to latest versions (`#1709 <https://github.com/ros2/rosbag2/issues/1709>`_)
+* Add cli option compression-threads-priority (`#1768 <https://github.com/ros2/rosbag2/issues/1768>`_)
+* Add computation of size contribution to info verb (`#1726 <https://github.com/ros2/rosbag2/issues/1726>`_)
+* Bugfix for wrong timestamps in ros2 bag info (`#1745 <https://github.com/ros2/rosbag2/issues/1745>`_)
+* Contributors: Alejandro Hernández Cordero, Michael Orlov, Nicola Loi, Roman
+
+0.28.0 (2024-06-17)
+-------------------
+* Add bindings for LocalMessageDefinitionSource (`#1697 <https://github.com/ros2/rosbag2/issues/1697>`_)
+* Add --log-level to ros2 bag play and record (`#1625 <https://github.com/ros2/rosbag2/issues/1625>`_)
+* Included to_rclcpp_qos_vector to Python wrappers (`#1642 <https://github.com/ros2/rosbag2/issues/1642>`_)
+* Contributors: Alejandro Hernández Cordero, Roman, methylDragon
+
+0.27.0 (2024-04-30)
+-------------------
+
+0.26.1 (2024-04-17)
+-------------------
+
+0.26.0 (2024-04-16)
+-------------------
+* Add option to disable recorder keyboard controls (`#1607 <https://github.com/ros2/rosbag2/issues/1607>`_)
+* Support service 2/2 --- rosbag2 service play (`#1481 <https://github.com/ros2/rosbag2/issues/1481>`_)
+* Use middleware send and receive timestamps from message_info during recording (`#1531 <https://github.com/ros2/rosbag2/issues/1531>`_)
+* Switch rclpy to be an exec_depend here. (`#1606 <https://github.com/ros2/rosbag2/issues/1606>`_)
+* Gracefully handle SIGINT and SIGTERM signals for play and burst CLI (`#1557 <https://github.com/ros2/rosbag2/issues/1557>`_)
+* Added exclude-topic-types to record (`#1582 <https://github.com/ros2/rosbag2/issues/1582>`_)
+* Contributors: Alejandro Hernández Cordero, Barry Xu, Bernd Pfrommer, Chris Lalancette, Michael Orlov, jmachowinski
+
 0.25.0 (2024-03-27)
 -------------------
 * Fix for false negative tests in rosbag2_py (`#1592 <https://github.com/ros2/rosbag2/issues/1592>`_)

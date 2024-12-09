@@ -2,6 +2,32 @@
 Changelog for package rosbag2_test_common
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.30.0 (2024-11-26)
+-------------------
+* Remove use of python_cmake_module (`#1570 <https://github.com/ros2/rosbag2/issues/1570>`_)
+* Improve the reliability of rosbag2 tests (`#1796 <https://github.com/ros2/rosbag2/issues/1796>`_)
+* Contributors: Alejandro Hernández Cordero, Chris Lalancette, Michael Orlov
+
+0.29.0 (2024-09-03)
+-------------------
+* Small cleanups to the rosbag2 tests. (`#1792 <https://github.com/ros2/rosbag2/issues/1792>`_)
+* [WIP] Remove rcpputils::fs dependencies in rosbag2 packages (`#1740 <https://github.com/ros2/rosbag2/issues/1740>`_)
+* Contributors: Chris Lalancette, Michael Orlov
+
+0.28.0 (2024-06-17)
+-------------------
+
+0.27.0 (2024-04-30)
+-------------------
+
+0.26.1 (2024-04-17)
+-------------------
+
+0.26.0 (2024-04-16)
+-------------------
+* Support service 2/2 --- rosbag2 service play (`#1481 <https://github.com/ros2/rosbag2/issues/1481>`_)
+* Contributors: Barry Xu
+
 0.25.0 (2024-03-27)
 -------------------
 * Make some changes for newer versions of uncrustify. (`#1578 <https://github.com/ros2/rosbag2/issues/1578>`_)

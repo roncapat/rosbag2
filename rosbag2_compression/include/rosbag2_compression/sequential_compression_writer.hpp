@@ -182,7 +182,6 @@ protected:
 
 private:
   std::unique_ptr<rosbag2_compression::CompressionFactory> compression_factory_{};
-  std::shared_ptr<rosbag2_compression::BaseCompressorInterface> compressor_{};
   std::mutex compressor_queue_mutex_;
   std::queue<std::shared_ptr<const rosbag2_storage::SerializedBagMessage>>
   compressor_message_queue_ RCPPUTILS_TSA_GUARDED_BY(compressor_queue_mutex_);
@@ -198,6 +197,7 @@ private:
   rosbag2_compression::CompressionOptions compression_options_{};
 
   bool should_compress_last_file_{true};
+  std::atomic_bool is_open_{false};
 
   // Runs a while loop that pulls data from the compression queue until
   // compression_is_running_ is false; should be run in a separate thread
@@ -205,10 +205,6 @@ private:
 
   // Closes the current backed storage and opens the next bagfile.
   void split_bagfile() override;
-
-  // Checks if the current recording bagfile needs to be split and rolled over to a new file.
-  bool should_split_bagfile(
-    const std::chrono::time_point<std::chrono::high_resolution_clock> & current_time);
 
   // Prepares the metadata by setting initial values.
   void init_metadata() override;

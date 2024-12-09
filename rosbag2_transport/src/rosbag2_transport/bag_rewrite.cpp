@@ -53,7 +53,7 @@ std::shared_ptr<rosbag2_storage::SerializedBagMessage> get_next(
     if (msg == nullptr) {
       continue;
     }
-    if (earliest_msg == nullptr || msg->time_stamp < earliest_msg->time_stamp) {
+    if (earliest_msg == nullptr || msg->recv_timestamp < earliest_msg->recv_timestamp) {
       earliest_msg = msg;
       earliest_msg_index = i;
     }
@@ -111,7 +111,7 @@ setup_topic_filtering(
   }
 
   for (const auto & [writer, record_options] : output_bags) {
-    rosbag2_transport::TopicFilter topic_filter{record_options};
+    rosbag2_transport::TopicFilter topic_filter{record_options, nullptr, true};
     auto filtered_topics_and_types = topic_filter.filter_topics(input_topics);
 
     // Done filtering - set up writer

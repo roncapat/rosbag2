@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.serialization import serialize_message
 import rosbag2_py
@@ -52,10 +53,12 @@ class SimpleBagRecorder(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    sbr = SimpleBagRecorder()
-    rclpy.spin(sbr)
-    rclpy.shutdown()
+    try:
+        with rclpy.init(args=args):
+            sbr = SimpleBagRecorder()
+            rclpy.spin(sbr)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
 
 
 if __name__ == '__main__':

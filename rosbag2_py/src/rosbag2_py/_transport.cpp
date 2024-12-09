@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <csignal>
 #include <chrono>
 #include <memory>
@@ -36,6 +37,36 @@ typedef std::unordered_map<std::string, rclcpp::QoS> QoSMap;
 
 namespace
 {
+
+class Arguments
+{
+public:
+  explicit Arguments(const std::vector<std::string> & args)
+  : arguments_(args)
+  {
+    std::for_each(
+      arguments_.begin(), arguments_.end(),
+      [this](const std::string & arg) {
+        pointers_.push_back(const_cast<char *>(arg.c_str()));
+      }
+    );
+    pointers_.push_back(nullptr);
+  }
+
+  char ** argv()
+  {
+    return arguments_.empty() ? nullptr : pointers_.data();
+  }
+
+  [[nodiscard]] int argc() const
+  {
+    return static_cast<int>(arguments_.size());
+  }
+
+private:
+  std::vector<std::string> arguments_;
+  std::vector<char *> pointers_;
+};
 
 rclcpp::QoS qos_from_handle(const py::handle source)
 {
@@ -130,9 +161,12 @@ namespace rosbag2_py
 class Player
 {
 public:
-  Player()
+  using SignalHandlerType = void (*)(int);
+
+  explicit Player(const std::string & log_level = "info")
   {
-    rclcpp::init(0, nullptr);
+    Arguments arguments({"--ros-args", "--log-level", log_level});
+    rclcpp::init(arguments.argc(), arguments.argv());
   }
 
   virtual ~Player()
@@ -140,25 +174,24 @@ public:
     rclcpp::shutdown();
   }
 
+  static void cancel()
+  {
+    exit_ = true;
+    wait_for_exit_cv_.notify_all();
+  }
+
   void play(
     const rosbag2_storage::StorageOptions & storage_options,
     PlayOptions & play_options)
   {
-    auto reader = rosbag2_transport::ReaderWriterFactory::make_reader(storage_options);
-    auto player = std::make_shared<rosbag2_transport::Player>(
-      std::move(reader), storage_options, play_options);
+    play_impl(std::vector{storage_options}, play_options, false);
+  }
 
-    rclcpp::executors::SingleThreadedExecutor exec;
-    exec.add_node(player);
-    auto spin_thread = std::thread(
-      [&exec]() {
-        exec.spin();
-      });
-    player->play();
-    player->wait_for_playback_to_finish();
-
-    exec.cancel();
-    spin_thread.join();
+  void play(
+    const std::vector<rosbag2_storage::StorageOptions> & storage_options,
+    PlayOptions & play_options)
+  {
+    play_impl(storage_options, play_options, false);
   }
 
   void burst(
@@ -166,30 +199,146 @@ public:
     PlayOptions & play_options,
     size_t num_messages)
   {
-    auto reader = rosbag2_transport::ReaderWriterFactory::make_reader(storage_options);
-    auto player = std::make_shared<rosbag2_transport::Player>(
-      std::move(reader), storage_options, play_options);
-
-    rclcpp::executors::SingleThreadedExecutor exec;
-    exec.add_node(player);
-    auto spin_thread = std::thread(
-      [&exec]() {
-        exec.spin();
-      });
-    player->play();
-    player->burst(num_messages);
-
-    exec.cancel();
-    spin_thread.join();
+    play_impl(std::vector{storage_options}, play_options, true, num_messages);
   }
+
+protected:
+  static void signal_handler(int sig_num)
+  {
+    if (sig_num == SIGINT || sig_num == SIGTERM) {
+      deferred_sig_number_ = sig_num;
+      rosbag2_py::Player::cancel();
+    }
+  }
+
+  static void install_signal_handlers()
+  {
+    deferred_sig_number_ = -1;
+    old_sigterm_handler_ = std::signal(SIGTERM, &rosbag2_py::Player::signal_handler);
+    old_sigint_handler_ = std::signal(SIGINT, &rosbag2_py::Player::signal_handler);
+  }
+
+  static void uninstall_signal_handlers()
+  {
+    if (old_sigterm_handler_ != SIG_ERR) {
+      std::signal(SIGTERM, old_sigterm_handler_);
+      old_sigterm_handler_ = SIG_ERR;
+    }
+    if (old_sigint_handler_ != SIG_ERR) {
+      std::signal(SIGINT, old_sigint_handler_);
+      old_sigint_handler_ = SIG_ERR;
+    }
+    deferred_sig_number_ = -1;
+  }
+
+  static void process_deferred_signal()
+  {
+    auto call_signal_handler = [](const SignalHandlerType & signal_handler, int sig_num) {
+        if (signal_handler != SIG_ERR && signal_handler != SIG_IGN && signal_handler != SIG_DFL) {
+          signal_handler(sig_num);
+        }
+      };
+
+    if (deferred_sig_number_ == SIGINT) {
+      call_signal_handler(old_sigint_handler_, deferred_sig_number_);
+    } else if (deferred_sig_number_ == SIGTERM) {
+      call_signal_handler(old_sigterm_handler_, deferred_sig_number_);
+    }
+  }
+
+  void play_impl(
+    const std::vector<rosbag2_storage::StorageOptions> & storage_options,
+    PlayOptions & play_options,
+    bool burst = false,
+    size_t burst_num_messages = 0)
+  {
+    install_signal_handlers();
+    try {
+      std::vector<rosbag2_transport::Player::reader_storage_options_pair_t> readers_with_options{};
+      readers_with_options.reserve(storage_options.size());
+      for (const auto & options : storage_options) {
+        readers_with_options.emplace_back(
+          rosbag2_transport::ReaderWriterFactory::make_reader(options), options);
+      }
+      std::shared_ptr<KeyboardHandler> keyboard_handler;
+      if (!play_options.disable_keyboard_controls) {
+#ifndef _WIN32
+        // Instantiate KeyboardHandler explicitly with disabled signal handler inside,
+        // since we have already installed our own signal handler
+        keyboard_handler = std::make_shared<KeyboardHandler>(false);
+#else
+        // We don't have signal handler option in constructor for windows version
+        keyboard_handler = std::shared_ptr<KeyboardHandler>(new KeyboardHandler());
+#endif
+      }
+      auto player = std::make_shared<rosbag2_transport::Player>(
+        std::move(readers_with_options), std::move(keyboard_handler), play_options);
+
+      rclcpp::executors::SingleThreadedExecutor exec;
+      exec.add_node(player);
+      auto spin_thread = std::thread(
+        [&exec]() {
+          exec.spin();
+        });
+      player->play();
+
+      auto wait_for_exit_thread = std::thread(
+        [&]() {
+          std::unique_lock<std::mutex> lock(wait_for_exit_mutex_);
+          wait_for_exit_cv_.wait(lock, [] {return rosbag2_py::Player::exit_.load();});
+          player->stop();
+        });
+      {
+        // Release the GIL for long-running play, so that calling Python code
+        // can use other threads
+        py::gil_scoped_release release;
+        if (burst) {
+          player->burst(burst_num_messages);
+        }
+        player->wait_for_playback_to_finish();
+      }
+
+      rosbag2_py::Player::cancel();  // Need to trigger exit from wait_for_exit_thread
+      if (wait_for_exit_thread.joinable()) {
+        wait_for_exit_thread.join();
+      }
+
+      exec.cancel();
+      if (spin_thread.joinable()) {
+        spin_thread.join();
+      }
+      exec.remove_node(player);
+    } catch (...) {
+      process_deferred_signal();
+      uninstall_signal_handlers();
+      throw;
+    }
+    process_deferred_signal();
+    uninstall_signal_handlers();
+  }
+
+  static std::atomic_bool exit_;
+  static std::condition_variable wait_for_exit_cv_;
+  static SignalHandlerType old_sigint_handler_;
+  static SignalHandlerType old_sigterm_handler_;
+  static int deferred_sig_number_;
+  std::mutex wait_for_exit_mutex_;
 };
+
+Player::SignalHandlerType Player::old_sigint_handler_ {SIG_ERR};
+Player::SignalHandlerType Player::old_sigterm_handler_ {SIG_ERR};
+int Player::deferred_sig_number_{-1};
+std::atomic_bool Player::exit_{false};
+std::condition_variable Player::wait_for_exit_cv_{};
 
 class Recorder
 {
 public:
-  Recorder()
+  using SignalHandlerType = void (*)(int);
+  explicit Recorder(const std::string & log_level = "info")
   {
-    rclcpp::init(0, nullptr);
+    Arguments arguments({"--ros-args", "--log-level", log_level});
+    rclcpp::init(arguments.argc(), arguments.argv());
   }
 
   virtual ~Recorder()
@@ -202,15 +351,7 @@ public:
     RecordOptions & record_options,
     std::string & node_name)
   {
-    auto old_sigterm_handler = std::signal(
-      SIGTERM, [](int /* signal */) {
-        rosbag2_py::Recorder::cancel();
-      });
-    auto old_sigint_handler = std::signal(
-      SIGINT, [](int /* signal */) {
-        rosbag2_py::Recorder::cancel();
-      });
-
+    install_signal_handlers();
     try {
       exit_ = false;
       auto exec = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
@@ -219,8 +360,20 @@ public:
       }
 
       auto writer = rosbag2_transport::ReaderWriterFactory::make_writer(record_options);
+      std::shared_ptr<KeyboardHandler> keyboard_handler;
+      if (!record_options.disable_keyboard_controls) {
+#ifndef _WIN32
+        // Instantiate KeyboardHandler explicitly with disabled signal handler inside,
+        // since we have already installed our own signal handler
+        keyboard_handler = std::make_shared<KeyboardHandler>(false);
+#else
+        // We don't have signal handler option in constructor for windows version
+        keyboard_handler = std::shared_ptr<KeyboardHandler>(new KeyboardHandler());
+#endif
+      }
+
       auto recorder = std::make_shared<rosbag2_transport::Recorder>(
-        std::move(writer), storage_options, record_options, node_name);
+        std::move(writer), std::move(keyboard_handler), storage_options, record_options, node_name);
       recorder->record();
 
       exec->add_node(recorder);
@@ -244,22 +397,12 @@ public:
       }
       exec->remove_node(recorder);
     } catch (...) {
-      // Return old signal handlers anyway
-      if (old_sigterm_handler != SIG_ERR) {
-        std::signal(SIGTERM, old_sigterm_handler);
-      }
-      if (old_sigint_handler != SIG_ERR) {
-        std::signal(SIGTERM, old_sigint_handler);
-      }
+      process_deferred_signal();
+      uninstall_signal_handlers();
       throw;
     }
-    // Return old signal handlers
-    if (old_sigterm_handler != SIG_ERR) {
-      std::signal(SIGTERM, old_sigterm_handler);
-    }
-    if (old_sigint_handler != SIG_ERR) {
-      std::signal(SIGTERM, old_sigint_handler);
-    }
+    process_deferred_signal();
+    uninstall_signal_handlers();
   }
 
   static void cancel()
@@ -269,11 +412,60 @@ public:
   }
 
 protected:
+  static void signal_handler(int sig_num)
+  {
+    if (sig_num == SIGINT || sig_num == SIGTERM) {
+      deferred_sig_number_ = sig_num;
+      rosbag2_py::Recorder::cancel();
+    }
+  }
+
+  static void install_signal_handlers()
+  {
+    deferred_sig_number_ = -1;
+    old_sigterm_handler_ = std::signal(SIGTERM, &rosbag2_py::Recorder::signal_handler);
+    old_sigint_handler_ = std::signal(SIGINT, &rosbag2_py::Recorder::signal_handler);
+  }
+
+  static void uninstall_signal_handlers()
+  {
+    if (old_sigterm_handler_ != SIG_ERR) {
+      std::signal(SIGTERM, old_sigterm_handler_);
+      old_sigterm_handler_ = SIG_ERR;
+    }
+    if (old_sigint_handler_ != SIG_ERR) {
+      std::signal(SIGINT, old_sigint_handler_);
+      old_sigint_handler_ = SIG_ERR;
+    }
+    deferred_sig_number_ = -1;
+  }
+
+  static void process_deferred_signal()
+  {
+    auto call_signal_handler = [](const SignalHandlerType & signal_handler, int sig_num) {
+        if (signal_handler != SIG_ERR && signal_handler != SIG_IGN && signal_handler != SIG_DFL) {
+          signal_handler(sig_num);
+        }
+      };
+
+    if (deferred_sig_number_ == SIGINT) {
+      call_signal_handler(old_sigint_handler_, deferred_sig_number_);
+    } else if (deferred_sig_number_ == SIGTERM) {
+      call_signal_handler(old_sigterm_handler_, deferred_sig_number_);
+    }
+  }
+
   static std::atomic_bool exit_;
   static std::condition_variable wait_for_exit_cv_;
+  static SignalHandlerType old_sigint_handler_;
+  static SignalHandlerType old_sigterm_handler_;
+  static int deferred_sig_number_;
   std::mutex wait_for_exit_mutex_;
 };
 
+Recorder::SignalHandlerType Recorder::old_sigint_handler_ {SIG_ERR};
+Recorder::SignalHandlerType Recorder::old_sigterm_handler_ {SIG_ERR};
+int Recorder::deferred_sig_number_{-1};
 std::atomic_bool Recorder::exit_{false};
 std::condition_variable Recorder::wait_for_exit_cv_{};
 
@@ -332,8 +524,11 @@ PYBIND11_MODULE(_transport, m) {
   .def_readwrite("node_prefix", &PlayOptions::node_prefix)
   .def_readwrite("rate", &PlayOptions::rate)
   .def_readwrite("topics_to_filter", &PlayOptions::topics_to_filter)
-  .def_readwrite("topics_regex_to_filter", &PlayOptions::topics_regex_to_filter)
-  .def_readwrite("topics_regex_to_exclude", &PlayOptions::topics_regex_to_exclude)
+  .def_readwrite("services_to_filter", &PlayOptions::services_to_filter)
+  .def_readwrite("regex_to_filter", &PlayOptions::regex_to_filter)
+  .def_readwrite("exclude_regex_to_filter", &PlayOptions::exclude_regex_to_filter)
+  .def_readwrite("exclude_topics_to_filter", &PlayOptions::exclude_topics_to_filter)
+  .def_readwrite("exclude_service_events_to_filter", &PlayOptions::exclude_services_to_filter)
   .def_property(
     "topic_qos_profile_overrides",
     &PlayOptions::getTopicQoSProfileOverrides,
@@ -363,6 +558,19 @@ PYBIND11_MODULE(_transport, m) {
     &PlayOptions::setPlaybackUntilTimestamp)
   .def_readwrite("wait_acked_timeout", &PlayOptions::wait_acked_timeout)
   .def_readwrite("disable_loan_message", &PlayOptions::disable_loan_message)
+  .def_readwrite("publish_service_requests", &PlayOptions::publish_service_requests)
+  .def_readwrite("service_requests_source", &PlayOptions::service_requests_source)
+  .def_readwrite("message_order", &PlayOptions::message_order)
+  ;
+
+  py::enum_<rosbag2_transport::ServiceRequestsSource>(m, "ServiceRequestsSource")
+  .value("SERVICE_INTROSPECTION", rosbag2_transport::ServiceRequestsSource::SERVICE_INTROSPECTION)
+  .value("CLIENT_INTROSPECTION", rosbag2_transport::ServiceRequestsSource::CLIENT_INTROSPECTION)
+  ;
+
+  py::enum_<rosbag2_transport::MessageOrder>(m, "MessageOrder")
+  .value("RECEIVED_TIMESTAMP", rosbag2_transport::MessageOrder::RECEIVED_TIMESTAMP)
+  .value("SENT_TIMESTAMP", rosbag2_transport::MessageOrder::SENT_TIMESTAMP)
   ;
 
   py::class_<RecordOptions>(m, "RecordOptions")
@@ -383,6 +591,7 @@ PYBIND11_MODULE(_transport, m) {
   .def_readwrite("compression_format", &RecordOptions::compression_format)
   .def_readwrite("compression_queue_size", &RecordOptions::compression_queue_size)
   .def_readwrite("compression_threads", &RecordOptions::compression_threads)
+  .def_readwrite("compression_threads_priority", &RecordOptions::compression_threads_priority)
   .def_property(
     "topic_qos_profile_overrides",
     &RecordOptions::getTopicQoSProfileOverrides,
@@ -394,16 +603,33 @@ PYBIND11_MODULE(_transport, m) {
   .def_readwrite("use_sim_time", &RecordOptions::use_sim_time)
   .def_readwrite("services", &RecordOptions::services)
   .def_readwrite("all_services", &RecordOptions::all_services)
+  .def_readwrite("disable_keyboard_controls", &RecordOptions::disable_keyboard_controls)
   ;
 
   py::class_<rosbag2_py::Player>(m, "Player")
-  .def(py::init())
-  .def("play", &rosbag2_py::Player::play, py::arg("storage_options"), py::arg("play_options"))
-  .def("burst", &rosbag2_py::Player::burst)
+  .def(py::init<>())
+  .def(py::init<const std::string &>())
+  .def(
+    "play",
+    py::overload_cast<const rosbag2_storage::StorageOptions &, PlayOptions &>(
+      &rosbag2_py::Player::play),
+    py::arg("storage_options"),
+    py::arg("play_options"))
+  .def(
+    "play",
+    py::overload_cast<const std::vector<rosbag2_storage::StorageOptions> &, PlayOptions &>(
+      &rosbag2_py::Player::play),
+    py::arg("storage_options"),
+    py::arg("play_options"))
+  .def(
+    "burst", &rosbag2_py::Player::burst, py::arg("storage_options"), py::arg("play_options"),
+    py::arg("num_messages"))
+  .def_static("cancel", &rosbag2_py::Player::cancel)
   ;
 
   py::class_<rosbag2_py::Recorder>(m, "Recorder")
-  .def(py::init())
+  .def(py::init<>())
+  .def(py::init<const std::string &>())
   .def(
     "record", &rosbag2_py::Recorder::record, py::arg("storage_options"), py::arg("record_options"),
     py::arg("node_name") = "rosbag2_recorder")
