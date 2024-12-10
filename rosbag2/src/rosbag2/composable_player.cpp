@@ -20,7 +20,7 @@
  */
 
 #include "rclcpp_components/register_node_macro.hpp"
-#include "rosbag2/component_player.hpp"
+#include "rosbag2/composable_player.hpp"
 
 namespace rosbag2
 {

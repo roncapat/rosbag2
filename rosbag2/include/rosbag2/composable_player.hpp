@@ -19,8 +19,8 @@
  * library cannot have, but the consuming code must have inorder to link.
  */
 
-#ifndef ROSBAG2__COMPONENT_PLAYER_HPP_
-#define ROSBAG2__COMPONENT_PLAYER_HPP_
+#ifndef ROSBAG2__COMPOSABLE_PLAYER_HPP_
+#define ROSBAG2__COMPOSABLE_PLAYER_HPP_
 
 #include <string>
 
@@ -53,4 +53,4 @@ public:
 };
 }  // namespace rosbag2
 
-#endif  // ROSBAG2__COMPONENT_PLAYER_HPP_
+#endif  // ROSBAG2__COMPOSABLE_PLAYER_HPP_

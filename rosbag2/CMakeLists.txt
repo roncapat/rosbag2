@@ -19,7 +19,7 @@ find_package(rosbag2_transport REQUIRED)
 
 # Library for Rosbag2 composable nodes
 add_library(${PROJECT_NAME}_nodes SHARED
-  src/rosbag2/component_player.cpp
+  src/rosbag2/composable_player.cpp
 #  src/rosbag2/composable_recorder.cpp
 )
 target_include_directories(${PROJECT_NAME}_nodes PUBLIC
