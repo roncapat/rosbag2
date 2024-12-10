@@ -12,52 +12,37 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND MSVC)
-  # /bigobj is needed to avoid error C1128:
-  #   https://msdn.microsoft.com/en-us/library/8578y171.aspx
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
-endif()
-
-# Windows supplies macros for min and max by default. We should only use min and max from stl
-if(WIN32)
-  add_definitions(-DNOMINMAX)
-endif()
-
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rosbag2_transport REQUIRED)
 
-add_library(${PROJECT_NAME} SHARED
+# Library for Rosbag2 composable nodes
+add_library(${PROJECT_NAME}_nodes SHARED
   src/rosbag2/component_player.cpp
+#  src/rosbag2/composable_recorder.cpp
 )
+target_include_directories(${PROJECT_NAME}_nodes PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 
-target_link_libraries(${PROJECT_NAME}
-  rclcpp::rclcpp
-  ${rclcpp_components_TARGETS}
-  rosbag2_transport::rosbag2_transport
-)
+ament_target_dependencies(${PROJECT_NAME}_nodes rclcpp rclcpp_components rosbag2_transport)
 
-rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN "rosbag2::Player"
-  EXECUTABLE player
+rclcpp_components_register_node(${PROJECT_NAME}_nodes PLUGIN "rosbag2::Player" EXECUTABLE player)
+
+install(DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
 )
 
 install(
-  TARGETS ${PROJECT_NAME}
-  EXPORT export_${PROJECT_NAME}
+  TARGETS ${PROJECT_NAME}_nodes
+  EXPORT export_${PROJECT_NAME}_nodes
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-ament_export_libraries(${PROJECT_NAME})
-
-ament_export_dependencies(
-  rclcpp_components
-  rosbag2_transport
-)
+# Export modern CMake targets
+ament_export_targets(export_${PROJECT_NAME}_nodes)
 
 ament_package()

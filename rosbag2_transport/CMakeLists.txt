@@ -72,9 +72,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   yaml-cpp::yaml-cpp
 )
 
+# rosbag2_transport::Player composable node is deprecated. Please use rosbag2::Player instead
 rclcpp_components_register_node(
   ${PROJECT_NAME} PLUGIN "rosbag2_transport::Player" EXECUTABLE player)
 
+# rosbag2_transport::Recorder composable node is deprecated. Please use rosbag2::Recorder instead
 rclcpp_components_register_node(
   ${PROJECT_NAME} PLUGIN "rosbag2_transport::Recorder" EXECUTABLE recorder)
 
