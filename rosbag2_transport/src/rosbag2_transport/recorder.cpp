@@ -741,7 +741,11 @@ void RecorderImpl::warn_if_new_qos_for_subscribed_topic(const std::string & topi
 // Recorder public interface
 
 Recorder::Recorder(const rclcpp::NodeOptions & node_options)
-: Recorder("rosbag2_recorder", node_options) {}
+: Recorder("rosbag2_recorder", node_options) {
+  RCLCPP_WARN(this->get_logger(),
+  "The rosbag2_transport::Recorder composable node is deprecated."
+  " Please use rosbag2::Recorder instead");
+}
 
 Recorder::Recorder(
   const std::string & node_name,
