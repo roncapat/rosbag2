@@ -92,7 +92,7 @@ public:
   explicit Player(const rclcpp::NodeOptions & node_options);
 
   /// \brief Default constructor and entry point for the composable player.
-  /// \note Uses from the rosbag2::Player constructor which is registered with ament resource index.
+  /// \note Used from the rosbag2::Player constructor which is registered with ament resource index.
   /// \details Will construct Player class and initialize play_options, storage_options from node
   /// parameters. At the end will call Player::play() to automatically start playback in a
   /// separate thread.
